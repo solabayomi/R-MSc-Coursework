@@ -1,0 +1,501 @@
+---
+title: 'R Exercise'
+author: "Sola"
+date: 'May 2022'
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+# do not change these options
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(error = TRUE,comment=NA) # do not edit this line.
+```
+
+# Instructions to students
+
+
+# Data description
+
+
+This dataset is part of a larger dataset that has been collected to help to estimate the price of used cars.
+
+It contains the following variables:
+
+- brand (manufacturer)
+- model (of car)
+- year (of registration of the car)
+- price (in GB pounds)
+- transmission (type of gearbox)
+- mileage (total distance covered by the car)
+- fuelType (type of fuel used by the car)
+- tax (annual cost of vehicle tax)
+- mpg (miles per gallon - a measure of fuel efficiency)
+- engineSize (size of the engine in litres)
+
+
+```{r libraries, include=FALSE}
+# load required libraries / additional files
+
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(flextable)
+library(performance)
+library(psych)
+library(corrplot)
+library(MASS)
+library(see)
+
+reorder_size <- function(x) {
+        factor(x, levels = names(sort(table(x), decreasing = TRUE)))
+}
+```
+
+```{r data}
+# load dataset
+
+CarPrice_data <- read.csv('../data/May_2022_Exam_Data.csv')
+
+```
+
+
+# Question 1: Data Preparation (11 marks)
+
+You are interested in modelling the price of vehicles that have all of the following properties:
+
+- mileage less than 65000
+- Manual transmission
+- Petrol engine (fuelType)
+- Costing less than £175 in annual Vehicle Tax.
+
+Once you have selected the rows of data with these properties, then you must *use your studentID* to select a random sample of 2000 rows of the data to perform the rest of your analysis with.
+
+You should remove any redundant variables (where only one value remains in that variable).
+
+This subset of the data is what you should use for the rest of this assessment. 
+
+
+a. Explain what data preparation is required in order for the data in May_2022_Exam_Data.csv to be suitable for this analysis.
+
+**(4 marks)**
+
+### Answer:
+
+* To begin I would need to filter the data based on the 4 properties given in the specification above. 
+* Then I would check for redundant variables and ensure this is removed as it will add no benefit to the exercise. 
+* I would check if any categorical variables still exist in the data and ensure this is factored. 
+* And lastly I would check if there are any missing values.
+
+
+b. Implement the required data preparation in the code chunk below:
+
+**(7 marks)**
+
+### Answer:
+
+```{r dataprep}
+#filter rows based on specification
+CarPrice_filtered<-CarPrice_data[CarPrice_data$mileage < 65000,]
+CarPrice_filtered<-CarPrice_filtered[CarPrice_filtered$transmission == "Manual",]
+CarPrice_filtered<-CarPrice_filtered[CarPrice_filtered$fuelType == "Petrol",]
+CarPrice_filtered<-CarPrice_filtered[CarPrice_filtered$tax < 175,]
+
+#remove redundant columns
+CarPrice_filtered <- subset(CarPrice_filtered, select=-c(transmission,fuelType))
+
+#check for NA values
+if (sum(is.na(CarPrice_filtered)) == 0) {
+  print("There are no NA values")
+}else {
+  print("There are some NA values")
+}
+#set seed and determine sample 
+set.seed(21064014)
+n_subsample <- 2000
+index <- sample(seq_along(CarPrice_filtered$brand), n_subsample)
+CarPrice_sample <- CarPrice_filtered[index, ]
+rm(CarPrice_filtered)
+
+```
+
+
+```{r dataprep2}
+#investigate levels of possible categorical variables
+unique(CarPrice_sample$brand)
+unique(CarPrice_sample$model)
+unique(CarPrice_sample$engineSize)
+
+#convert to factors
+CarPrice_sample$brand <- factor(CarPrice_sample$brand)
+CarPrice_sample$model <- factor(CarPrice_sample$model)
+CarPrice_sample$engineSize <- factor(CarPrice_sample$engineSize)
+```
+
+# Question 2: Exploratory Data Analysis (22 marks)
+
+## Descriptive Statistics
+
+a.	What descriptive statistics would be appropriate for this dataset?  Explain why these are useful in this context.
+
+**(2 marks)**
+
+### Answer: 
+I have identified 3 categorical variables left in the data.   
+They are **brand**,**Model**, and **engineSize**. These variables can be used to categorize each car.     
+We may wish to assess their frequencies or proportions relative to price.     
+
+The numerical variables are **year**,**price**, **mileage**, **tax**, and **mpg**.     
+Possible descriptive statistics include Mean, median, minimum, maximum, 1st quantile and 3rd quantile
+
+
+b. Produce those descriptive statistics in the code chunk below:
+
+**(4 marks)**
+
+### Answer:
+
+```{r DescriptiveStats}
+
+print("Descriptive statistics for brand vs year:")
+table(CarPrice_sample$brand,CarPrice_sample$year)
+print("Descriptive statistics for brand vs engineSize:")
+table(CarPrice_sample$brand,CarPrice_sample$engineSize)
+
+print("Descriptive statistics for year:")
+summary(CarPrice_sample$year)
+print("Descriptive statistics for price:")
+summary(CarPrice_sample$price)
+print("Descriptive statistics for mileage:")
+summary(CarPrice_sample$mileage)
+print("Descriptive statistics for tax:")
+summary(CarPrice_sample$tax)
+print("Descriptive statistics for mpg:")
+summary(CarPrice_sample$mpg)
+```
+
+c. What have those descriptive statistics told you – and how does this inform the analysis that you would undertake on this data or any additional data cleaning requirements?
+
+**(4 marks)**
+
+### Answer:
+From the descriptive statistics, I can deduce that majority of the cars under consideration were registered between 2013 and 2020. This is also shown by the mean and median year being 2017, skewed toward the maximum year, compared to the minimum year of 1998.          
+I can also see that there are cars with engineSize 0(zero). These need to be removed because it is unrealistic for a car to have 0 engine size.         
+The mean and median prices are skewed toward the minimum price indicating the possibility that some high car prices are out of pattern, or could be termed outliers.
+The mpg seems to follow a normal distribution.
+
+## Exploratory Graphs
+
+d. What exploratory graphs would be appropriate for this dataset? Explain why these are useful in this context.
+
+**(2 marks)**
+
+### Answer:
+Possible exploratory graphs include the histograms, barplots and scatterplot.       
+For example, this could be used to investigate the pattern of prices versus mileage.   
+It could also be used to represent the percentages of car brands used in the dataset. 
+The average price of a car by car brand could also be investigated
+
+
+e. Now produce those exploratory graphs in the code chunk below:
+
+**(4 marks)**
+
+### Answer:
+
+```{r ExploratoryGraphs1, dev='png'}
+#Bar Plot showing proportion of car brands in dataset
+ggplot(CarPrice_sample, aes(x = reorder_size(brand))) +
+        geom_bar(aes(y = (..count..)/sum(..count..))) +
+        xlab("Car Brands") +
+        scale_y_continuous(labels = scales::percent, name = "Proportion") +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+        ggtitle("Bar Plot showing proportion of car brands in dataset")
+```
+
+
+```{r ExploratoryGraphs2, dev='png'}
+#Scatter plot showing effect of Mileage on Price
+ggplot(CarPrice_sample,aes(x=mileage,y=price))+
+  geom_point()+
+  xlab("Mileage")+
+  ylab("Price")+
+  ggtitle("Scatter plot showing effect of Mileage on Price")+
+  stat_smooth(method="lm",se=TRUE)
+```
+
+
+```{r ExploratoryGraphs3}
+
+```
+
+f. Interpret these exploratory graphs.  How do these graphs inform your subsequent analysis?
+
+**(4 marks)**
+
+### Answer:
+A large majority of the cars are of the Ford brand. This dataset may not give a true picture of price trends globally as each car brand has regional dominance in certain markets. Any conclusion drawn is based mostly on prices of 1 brand(Ford).      
+
+The scatter plot clearly indicates that cars with lower mileage tend to be more expensive on average or more highly valued. There is a negative correlation between price and mileage
+ 
+
+
+## Correlations
+
+g. What linear correlations are present within this data?
+
+**(2 marks)**
+
+### Answer:
+As shown in the plot below, there is moderate linear correlation between the following pairs;       
+
+* year and mileage.
+* year and price.
+* year and tax.
+* price and mileage.
+* price and mpg.
+
+There is a weak linear correlation between;        
+
+* price and tax.
+* mileage and tax.
+* tax and mpg.
+
+
+```{r linearcor, dev='png'}
+#remove categorical variables and show correlation plot
+CarPrice_cor <- subset(CarPrice_sample, select=-c(brand, model, engineSize))
+corrplot(cor(CarPrice_cor),
+  method = "number",
+  type = "upper" 
+)
+
+```
+
+# Question 3: Bivariate relationship (14 marks)
+
+a. Which of the potential explanatory variables has the strongest linear relationship with the dependent variable?
+
+**(1 mark)**
+
+### Answer:
+As shown above, the mpg has the strongest linear relationship with the dependent variable
+
+
+b. Create a linear model to model this relationship.
+
+**(2 marks)**
+
+### Answer:
+
+
+```{r model1}
+model_mpg <- lm(price ~ mpg, data = CarPrice_cor)
+as_flextable(model_mpg)
+
+```
+
+c. Explain and interpret the model:
+
+**(3 marks)**
+
+### Answer:
+As seen from the value of R-squared, this model explains 38.58% of variation in Price.
+The p-values for the whole model as well as the predictor variable are less than 0.05(at 95% confidence interval).    
+Hence we can conclude that this linear model is statistically significant. The 3 stars indicated beside the predictor p-value shows a high level of significance.     
+At 95% confidence interval, we reject the null hypothesis that mpg has no effect on price.
+
+
+
+d. Comment on the performance of this model, including comments on overall model fit and the validity of model assumptions. Include any additional code required for you to make these comments in the code chunk below.
+
+**(4 marks)**
+
+### Answer:
+As shown in the plots below, we can conclude that the model adequately satisfies all the checks except for the posterior predictive check which shows a slight distortion.
+```{r model1performance}
+check_model(model_mpg)
+
+
+```
+
+
+## Bootstrap
+
+e. Use bootstrapping on this model to obtain a 95% confidence interval of the estimate of the slope parameter.
+
+**(4 marks)**
+
+### Answer:
+
+```{r bootstrap}
+
+Nbootstrap<- 1000 
+coeff_mpg <-rep(NA,Nbootstrap)
+
+set.seed(21064014)
+for(i in seq_len(Nbootstrap)){
+  val<-sample(seq_along(CarPrice_cor$price),size=length(CarPrice_cor$price),replace=TRUE) 
+  bootsample<- CarPrice_cor[val,]
+  full_model <- lm(price ~ ., data=bootsample)
+  model_boot <- stepAIC(full_model, trace=FALSE)
+  coeff_mpg[i] <- model_boot$coef["mpg"]
+}
+
+# make NA = 0
+coeff_mpg[is.na(coeff_mpg)] <- 0
+
+# display histogram
+Bootstrap <- data.frame(Coefficient=coeff_mpg)
+ggplot(Bootstrap, aes(x=Coefficient)) +
+geom_histogram(aes(y = ..density..),binwidth = .5)+
+  geom_density()+
+ggtitle("Bootstrapped Coefficients")+
+theme_bw()
+
+# 95% bootstrap confidence interval
+quantile(coeff_mpg,c(.025,0.975))
+
+
+
+```
+
+
+
+# Question 4: Multivariable relationship (10 marks)
+
+Create a model with all of the appropriate remaining explanatory variables included:
+
+```{r model2}
+model_full <- lm(price ~ ., data=CarPrice_cor)
+as_flextable(model_full)
+
+```
+
+a. Explain and interpret the model:
+
+**(4 marks)**
+
+### Answer:
+As shown, the value of R-squared has increased to 59.22%. This model explains 59.22% of variation in Price.      
+The p-values for the whole model as well as each of the predictor variables are less than 0.05(at 95% confidence interval). Hence we can conclude that this linear model is statistically significant. The 3 stars indicated beside the predictor p-values show a high level of statistical significance.       
+At 95% confidence interval, we reject the null hypothesis that these variables have no effect on price.
+
+
+
+
+b. Comment on the performance of this model, including comments on overall model fit and the validity of model assumptions. Include any additional code required for you to make these comments in the code chunk below.
+
+**(4 marks)**
+
+### Answer:
+As shown in plots below, the Linearity and homogeneity of variance show errors in the model plots before 0(zero). This error needs to be investigated as it shows the assumption that the variances are the same is false.
+
+```{r model2performance}
+
+check_model(model_full)
+
+
+```
+
+c. What general concerns do you have regarding this model?
+
+**(2 marks)**
+
+### Answer: 
+This model does not satisfy all the assumptions.
+There may be variables used in computing the model that have little or no effect on variation in price.
+
+# Question 5: Model simplification (8 marks)
+
+
+a.	What approaches for model simplification would you consider implementing and why?
+
+**(4 marks)**
+
+### Answer:
+I would ensure that the model has just the right set of variables that would ensure that it is as simple as possible while retaining validity. All variables contributing little to the model will be removed.       
+One approach to achieving this is by using stepwise model selection.     
+This is done by calculating the AIC for different combinations of variables and settling for the model with the lowest AIC.
+
+b.	What are the potential advantages of simplifying a model?
+
+**(2 marks)**
+
+### Answer:
+It is computationally efficient
+
+c.	 What are the potential disadvantages of simplifying a model?
+
+**(2 marks)**
+
+### Answer:
+* It may not satisfy all the assumptions
+* It may introduce bias 
+
+# Question 6: Reporting (35 marks)
+
+A client is looking to purchase a used VW Polo (registration year either 2018 or 2019, manual transmission, petrol engine) and wants to understand what factors influence the expected price of a used car, (and how they influence the price). 
+
+Write a short report of 300-500 words for the client. 
+
+Furthermore, include an explanation as to which statistical model you would recommend, and why you have selected that statistical model. 
+
+Comment on any suggestions for alterations to the statistical model that would be appropriate to consider. 
+
+Highlight what may or may not be directly transferable from the scenario analysed in Questions 1 to 5. 
+
+
+### Answer:
+
+# Report on factors influencing price of used cars
+
+### Introduction	
+This report aims to present my analysis and findings on factors influencing the expected price of used manual transmission, petrol engine cars, with mileage less than 65,000 and annual vehicle tax less than 175 GBP, as advisory on the purchase of a used VW Polo (registration year either 2018 or 2019, manual transmission, petrol engine).	
+The data analyzed is a subset of a larger dataset collected specifically to enable estimation of the price of used cars.
+
+### Exploratory data analysis
+Initial investigation carried out presented the following pictorial findings.
+
+`r knitr::include_graphics(knitr::fig_chunk('ExploratoryGraphs1', 'png'))`
+`r knitr::include_graphics(knitr::fig_chunk('ExploratoryGraphs2', 'png'))`
+`r knitr::include_graphics(knitr::fig_chunk('linearcor', 'png'))`
+
+
+From the descriptive statistics, I can deduce that majority of the cars under consideration were registered between 2013 and 2020. This is also shown by the mean and median year(2017), skewed toward the maximum year, compared to the minimum year of 1998. This falls well within the target range of 2018/2019.
+The mean and median prices are skewed toward the minimum price indicating the possibility that some high car prices are out of pattern or could be termed outliers.
+The mpg seems to follow a normal distribution.
+The scatter plot clearly indicates that cars with lower mileage tend to be more expensive on average and more highly valued. There is a negative correlation between these 2 variables.
+
+### Methods
+A few statistical methods used include ;
+**Mean**, used to investigate the averages
+**Regression**, used to investigate relationships between the price and another variable
+**Sample size determination** 
+**Bootstrapping**, used to observe variability of price with respect to another variable
+and **Hypothesis testing**, used to decide whether to reject or not reject the null hypothesis
+A possible challenge with the results of the analysis is the observation that more than 60% of the car brands are of one brand (Ford). This may possibly result in varying conclusions if the model is applied in certain regions or geographical locations
+
+### Results and Interpretation
+The results show that **Miles per gallon**, ‘mpg’ has the highest correlation with price, though negative. This result explains 39% variation in price. The next highest (negative) correlation with price is **mileage**. 
+This suggests that a key determinant in estimating the price of any used car is the Miles per gallon. The higher the miles per gallon, the lower the price. However, this must be combined with another determinant, perhaps mileage, to have a higher effect on price. The observation indicates that the price of a vehicle decreases as the mileage increases.
+
+### Conclusion
+Based on the above statistical evidence, we can infer that the least expensive VW Polo with manual transmission, petrol engine and registered in 2018 or 2019 will be one with the highest Miles per gallon and Mileage.
+Further investigation could be carried out to determine how much additional effect Mileage will have on the price of a used car. A more balanced distribution of car brands based on regions may also be investigated to give a broader view on the subject.
+
+
+
+
+
+
+
+
+# Session Information
+
+Do not edit this part. Make sure that you compile your document so that the information about your session (including software / package versions) is included in your submission.
+
+```{r}
+sessionInfo()
+```
